@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多功能 KTV Web App</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 800px;
+      background: #fff;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.5rem;
+    }
+    #video-container {
+      width: 100%;
+      background-color: #000;
+      margin: 1rem 0;
+      aspect-ratio: 16 / 9;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    button, input[type="file"] {
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      font-size: 1rem;
+      background-color: #e9ecef;
+    }
+    button:hover {
+      background-color: #dee2e6;
+    }
+    #playlist-container {
+      margin-top: 1.5rem;
+    }
+    #playlist {
+      list-style-type: decimal;
+      padding-left: 1.5rem;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+    #playlist li {
+      padding: 0.5rem;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+    }
+    #playlist li:last-child {
+      border-bottom: none;
+    }
+    #playlist li.playing {
+      background-color: #dbe4ff;
+      font-weight: bold;
+    }
+    #pitch-status {
+      font-weight: bold;
+      color: #0056b3;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>KTV 播放器</h2>
+
+  <div class="controls-grid">
+    <div class="control-group">
+      <label for="file-input">1. 選擇影片檔案</label>
+      <input type="file" id="file-input" accept="video/*" multiple>
+    </div>
+    <div class="control-group">
+      <label>2. 音訊處理</label>
+      <button id="vocal-toggle">啟用去人聲</button>
+    </div>
+    <div class="control-group">
+      <label>3. 音高調整 (會改變速度)</label>
+      <div style="display: flex; gap: 0.5rem;">
+        <button id="pitch-down" style="flex: 1;">降 Key</button>
+        <button id="pitch-up" style="flex: 1;">升 Key</button>
+      </div>
+      <div id="pitch-status">Key: 0</div>
+    </div>
+  </div>
+
+  <div id="video-container">
+    <video id="player" controls></video>
+  </div>
+
+  <div id="playlist-container">
+    <h3>待播清單</h3>
+    <ol id="playlist"></ol>
+  </div>
+</div>
+
+<script>
+  // DOM Elements
+  const fileInput = document.getElementById('file-input');
+  const player = document.getElementById('player');
+  const playlistEl = document.getElementById('playlist');
+  const vocalToggleButton = document.getElementById('vocal-toggle');
+  const pitchUpButton = document.getElementById('pitch-up');
+  const pitchDownButton = document.getElementById('pitch-down');
+  const pitchStatus = document.getElementById('pitch-status');
+
+  // State
+  let audioContext;
+  let sourceNode;
+  let splitterNode, mergerNode, vocalInverterNode;
+  let isVocalRemove = false;
+  let currentPitch = 0; // in semitones
+  let playlist = []; // Array of { name: string, url: string }
+  let currentTrackIndex = -1;
+
+  // --- Web Audio API Setup ---
+  function setupAudioGraph() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (!sourceNode) {
+      sourceNode = audioContext.createMediaElementSource(player);
+    }
+    if (sourceNode.mediaElement.src === "") return; // Don't setup if no video is loaded
+
+    // Disconnect previous graph to rebuild
+    sourceNode.disconnect();
+
+    if (isVocalRemove) {
+      // Create nodes for vocal removal if they don't exist
+      if (!splitterNode) splitterNode = audioContext.createChannelSplitter(2);
+      if (!mergerNode) mergerNode = audioContext.createChannelMerger(2);
+      if (!vocalInverterNode) {
+        vocalInverterNode = audioContext.createGain();
+        vocalInverterNode.gain.value = -1;
+      }
+      
+      // Left channel -> Merger Left
+      // Right channel -> Inverter -> Merger Left (creates L-R in left channel)
+      sourceNode.connect(splitterNode);
+      splitterNode.connect(mergerNode, 0, 0); // Left to Merger's Left
+      splitterNode.connect(vocalInverterNode, 1, 0); // Right to Inverter
+      vocalInverterNode.connect(mergerNode, 0, 0); // Inverted Right to Merger's Left
+      
+      mergerNode.connect(audioContext.destination);
+
+    } else {
+      // Direct connection if vocal removal is off
+      sourceNode.connect(audioContext.destination);
+    }
+  }
+
+  // --- Playlist and Playback Logic ---
+  fileInput.addEventListener('change', (event) => {
+    const files = event.target.files;
+    for (const file of files) {
+      playlist.push({
+        name: file.name,
+        url: URL.createObjectURL(file)
+      });
+    }
+    renderPlaylist();
+    if (currentTrackIndex === -1 && playlist.length > 0) {
+      playTrack(0);
+    }
+  });
+
+  function renderPlaylist() {
+    playlistEl.innerHTML = '';
+    playlist.forEach((track, index) => {
+      const li = document.createElement('li');
+      li.textContent = track.name;
+      li.dataset.index = index;
+      if (index === currentTrackIndex) {
+        li.classList.add('playing');
+      }
+      li.addEventListener('click', () => playTrack(index));
+      playlistEl.appendChild(li);
+    });
+  }
+
+  function playTrack(index) {
+    if (index < 0 || index >= playlist.length) return;
+    
+    currentTrackIndex = index;
+    const track = playlist[index];
+    player.src = track.url;
+    player.play().then(() => {
+        if (!audioContext) {
+            setupAudioGraph();
+        }
+    }).catch(e => console.error("Playback failed:", e));
+
+    renderPlaylist();
+    updatePitch(); // Apply current pitch to new track
+  }
+
+  player.addEventListener('ended', () => {
+    const nextIndex = currentTrackIndex + 1;
+    if (nextIndex < playlist.length) {
+      playTrack(nextIndex);
+    }
+  });
+
+   player.addEventListener('play', () => {
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+   });
+
+  // --- Controls Logic ---
+  vocalToggleButton.addEventListener('click', () => {
+    isVocalRemove = !isVocalRemove;
+    vocalToggleButton.textContent = isVocalRemove ? '關閉去人聲' : '啟用去人聲';
+    vocalToggleButton.style.backgroundColor = isVocalRemove ? '#a3d1a3' : '#e9ecef';
+    setupAudioGraph(); // Rebuild the graph with the new setting
+  });
+
+  function updatePitch() {
+    // Formula: rate = 2^(semitones / 12)
+    player.playbackRate = Math.pow(2, currentPitch / 12);
+    pitchStatus.textContent = `Key: ${currentPitch > 0 ? '+' : ''}${currentPitch}`;
+  }
+
+  pitchUpButton.addEventListener('click', () => {
+    currentPitch++;
+    updatePitch();
+  });
+
+  pitchDownButton.addEventListener('click', () => {
+    currentPitch--;
+    updatePitch();
+  });
+
+</script>
+
+</body>
+</html>
