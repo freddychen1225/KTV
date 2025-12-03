@@ -3,246 +3,335 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>KTV 影音同步播放器 (MV模式)</title>
+  <title>KTV 終極播放器</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
+    /* 樣式保持與之前類似，針對整合做優化 */
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: #000;
-      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background-color: #121212; color: #e0e0e0;
       margin: 0; padding: 10px;
       display: flex; flex-direction: column; align-items: center;
       min-height: 100vh;
     }
-    .container { width: 100%; max-width: 800px; padding-bottom: 50px;}
+    .container { width: 100%; max-width: 800px; padding-bottom: 80px; }
     
-    /* 影片區塊 */
+    /* 播放區 */
     #video-wrapper {
-      position: relative;
-      width: 100%;
-      padding-top: 56.25%; /* 16:9 */
-      background: #111;
-      margin-bottom: 15px;
+      position: relative; width: 100%; padding-top: 56.25%;
+      background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 10px;
     }
-    video {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    }
-
-    /* 步驟引導 */
-    .step-card {
-      background: #222; border: 1px solid #333; border-radius: 8px;
-      padding: 15px; margin-bottom: 15px;
-    }
-    .step-title { color: #4caf50; font-weight: bold; margin-bottom: 8px; display: block;}
-    .tool-btn {
-      display: inline-block; background: #2196f3; color: white; text-decoration: none;
-      padding: 8px 16px; border-radius: 4px; font-size: 0.9rem; margin-top: 5px;
-    }
+    video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
     /* 控制區 */
-    .control-row {
-      display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;
+    .control-panel {
+      background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 15px;
     }
-    .file-group {
-      background: #333; padding: 10px; border-radius: 8px;
-    }
-    .file-label { font-size: 0.85rem; color: #aaa; margin-bottom: 5px; display: block;}
-    input[type="file"] { width: 100%; font-size: 0.9rem; color: #fff;}
+    .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
     
-    /* 同步狀態 */
-    #sync-status {
-      text-align: center; font-size: 0.9rem; color: #ff9800; margin-bottom: 10px;
-      height: 20px;
+    button {
+      padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer;
+      font-size: 1rem; font-weight: bold; transition: opacity 0.2s;
     }
+    .btn-play { background: #03dac6; color: #000; width: 100%; max-width: 200px; }
+    .btn-vocal { background: #333; color: #fff; border: 1px solid #555; }
+    .btn-vocal.active { background: #cf6679; color: #000; border-color: #cf6679; }
+    
+    /* 輸入區 */
+    .input-group {
+      background: #2c2c2c; padding: 12px; border-radius: 8px; margin-bottom: 10px;
+    }
+    .input-label { display: block; color: #aaa; font-size: 0.85rem; margin-bottom: 5px; }
+    input[type="file"] { width: 100%; color: #fff; font-size: 0.9rem; }
 
-    /* 播放控制 */
-    .main-controls {
-      display: flex; gap: 10px; justify-content: center;
+    /* 清單區 */
+    #playlist { list-style: none; padding: 0; margin: 0; }
+    .playlist-item {
+      background: #252525; margin-bottom: 8px; padding: 12px; border-radius: 8px;
+      display: flex; justify-content: space-between; align-items: center; cursor: pointer;
     }
-    button.play-btn {
-      background: #e91e63; color: white; border: none; padding: 10px 30px;
-      border-radius: 25px; font-size: 1.1rem; cursor: pointer;
-    }
-    button.reset-btn {
-      background: #555; color: white; border: none; padding: 10px;
-      border-radius: 8px; cursor: pointer;
-    }
-
+    .playlist-item.playing { background: #333; border-left: 4px solid #03dac6; }
+    .item-info { flex-grow: 1; overflow: hidden; }
+    .item-title { display: block; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-sub { display: block; font-size: 0.8rem; color: #888; margin-top: 3px; }
+    .btn-del { background: none; color: #666; font-size: 1.2rem; padding: 0 8px; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2 style="text-align: center; margin-top: 0;">🎤 KTV 影音同步版</h2>
+  <h2 style="text-align: center; color: #bb86fc; margin: 10px 0;">KTV 終極版</h2>
 
+  <!-- 播放器 -->
   <div id="video-wrapper">
-    <!-- 這是原本的影片 (我們會把它的聲音靜音) -->
     <video id="mainVideo" playsinline webkit-playsinline></video>
   </div>
-  
-  <!-- 這是外部處理好的音檔 (隱藏播放，我們只聽它的聲音) -->
+  <!-- 隱藏的音訊播放器 (負責播放升降Key後的聲音) -->
   <audio id="extAudio"></audio>
 
-  <div id="sync-status"></div>
-
-  <div class="main-controls">
-    <button class="play-btn" id="playToggle">▶ 播放 / 暫停</button>
-    <button class="reset-btn" onclick="location.reload()">重置</button>
-  </div>
-
-  <hr style="border-color: #333; margin: 20px 0;">
-
-  <!-- 步驟 1 -->
-  <div class="step-card">
-    <span class="step-title">步驟 1：準備素材</span>
-    <div style="font-size: 0.9rem; color: #ccc;">
-      1. 準備你的 <b>MV 影片檔</b> (MP4)。<br>
-      2. 去 <a href="https://vocalremover.org/pitch" target="_blank" style="color:#2196f3">VocalRemover</a> 上傳影片，調整 Key，下載 <b>處理後的 MP3</b>。
+  <!-- 控制面板 -->
+  <div class="control-panel">
+    <div class="btn-row">
+      <button id="playBtn" class="btn-play">▶ 播放</button>
+      <button id="vocalBtn" class="btn-vocal">去人聲</button>
+    </div>
+    
+    <div style="text-align: center; color: #888; font-size: 0.9rem; margin-top: 5px;" id="status-text">
+      請先加入歌曲
     </div>
   </div>
 
-  <!-- 步驟 2 -->
-  <div class="step-card">
-    <span class="step-title">步驟 2：載入檔案 (影音合體)</span>
-    <div class="control-row">
-      <div class="file-group">
-        <span class="file-label">1. 選擇原始 MV 影片 (影像用)</span>
-        <input type="file" id="videoInput" accept="video/*">
-      </div>
-      <div class="file-group">
-        <span class="file-label">2. 選擇處理後的 MP3 (聲音用)</span>
-        <input type="file" id="audioInput" accept="audio/*">
-      </div>
+  <!-- 新增歌曲區塊 -->
+  <div class="control-panel">
+    <h3 style="margin: 0 0 10px 0; font-size: 1rem; color: #fff;">＋ 新增歌曲配對</h3>
+    
+    <div class="input-group">
+      <span class="input-label">1. 選擇影片 MV (MP4)</span>
+      <input type="file" id="videoInput" accept="video/*">
     </div>
+    
+    <div class="input-group">
+      <span class="input-label">2. 選擇升降 Key 後的音檔 (MP3) - <a href="https://vocalremover.org/pitch" target="_blank" style="color:#03dac6">去製作</a></span>
+      <input type="file" id="audioInput" accept="audio/*">
+    </div>
+
+    <button onclick="addToPlaylist()" style="width: 100%; background: #444; color: white;">加入清單</button>
   </div>
 
+  <!-- 清單 -->
+  <ul id="playlist"></ul>
 </div>
 
 <script>
+  // DOM
+  const mainVideo = document.getElementById('mainVideo');
+  const extAudio = document.getElementById('extAudio');
+  const playBtn = document.getElementById('playBtn');
+  const vocalBtn = document.getElementById('vocalBtn');
+  const statusText = document.getElementById('status-text');
+  const playlistEl = document.getElementById('playlist');
+  
+  // Inputs
   const videoInput = document.getElementById('videoInput');
   const audioInput = document.getElementById('audioInput');
-  const video = document.getElementById('mainVideo');
-  const audio = document.getElementById('extAudio');
-  const playBtn = document.getElementById('playToggle');
-  const status = document.getElementById('sync-status');
 
-  let isVideoReady = false;
-  let isAudioReady = false;
+  // State
+  let playlist = [];
+  let currentIndex = -1;
+  let isPlaying = false;
+  let isVocalRemove = false;
   let syncInterval;
 
-  // 1. 載入影片
-  videoInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      video.src = URL.createObjectURL(file);
-      // 重要：把影片靜音，這樣才不會聽到原調的聲音和升降調的聲音打架
-      video.muted = true; 
-      isVideoReady = true;
-      checkReady();
-    }
-  });
+  // AudioContext
+  let audioCtx;
+  let sourceNode; // 連接 extAudio 的來源
+  let splitter, merger, inverter;
 
-  // 2. 載入音檔
-  audioInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      audio.src = URL.createObjectURL(file);
-      isAudioReady = true;
-      checkReady();
+  // 1. 初始化 AudioContext (去人聲用)
+  function initAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-  });
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
 
-  function checkReady() {
-    if (isVideoReady && isAudioReady) {
-      status.textContent = "✅ 影音皆已就緒，同步模式啟動！";
-      status.style.color = "#4caf50";
-    } else if (isVideoReady) {
-      status.textContent = "⚠️ 等待載入 MP3 音檔...";
+  function setupAudioRouting() {
+    initAudio();
+    
+    // 斷開舊連接
+    if (sourceNode) sourceNode.disconnect();
+    else sourceNode = audioCtx.createMediaElementSource(extAudio);
+
+    if (isVocalRemove) {
+      // 去人聲邏輯 (L-R)
+      if (!splitter) splitter = audioCtx.createChannelSplitter(2);
+      if (!merger) merger = audioCtx.createChannelMerger(2);
+      if (!inverter) { inverter = audioCtx.createGain(); inverter.gain.value = -1; }
+
+      sourceNode.connect(splitter);
+      splitter.connect(merger, 0, 0); // L -> L
+      splitter.connect(inverter, 1);  // R -> Inverter
+      inverter.connect(merger, 0, 0); // -R -> L (L-R)
+      
+      // 複製到右聲道 (雙單聲道輸出)
+      splitter.connect(merger, 0, 1);
+      inverter.connect(merger, 0, 1);
+
+      merger.connect(audioCtx.destination);
+    } else {
+      // 正常播放
+      sourceNode.connect(audioCtx.destination);
     }
   }
 
-  // 3. 同步控制邏輯
+  // 2. 播放控制 & 同步
   playBtn.addEventListener('click', togglePlay);
 
   function togglePlay() {
-    if (!isVideoReady) return alert("請先載入影片！");
-    
-    // 如果只有影片沒有MP3，就當作普通播放器用
-    if (!isAudioReady) {
-      video.muted = false; // 恢復影片聲音
-      if (video.paused) {
-        video.play();
-        playBtn.textContent = "⏸ 暫停";
-      } else {
-        video.pause();
-        playBtn.textContent = "▶ 播放";
-      }
-      return;
-    }
+    if (currentIndex === -1) return alert("請先加入歌曲！");
+    initAudio(); // 確保解鎖
 
-    // 影音同步模式
-    if (video.paused) {
-      // 開始播放
-      const startPromise = video.play();
-      if (startPromise !== undefined) {
-        startPromise.then(() => {
-          // 影片開始後，立刻讓音訊跟上
-          audio.currentTime = video.currentTime;
-          audio.play();
-          startSyncCheck(); // 啟動校正
-          playBtn.textContent = "⏸ 暫停";
-        }).catch(error => console.log("播放被阻擋", error));
-      }
-    } else {
-      // 暫停
-      video.pause();
-      audio.pause();
-      stopSyncCheck();
+    if (isPlaying) {
+      mainVideo.pause();
+      extAudio.pause();
+      stopSync();
       playBtn.textContent = "▶ 播放";
+      isPlaying = false;
+    } else {
+      const p = mainVideo.play();
+      if (p !== undefined) {
+        p.then(() => {
+          extAudio.currentTime = mainVideo.currentTime;
+          extAudio.play();
+          setupAudioRouting(); // 確保音訊路由生效
+          startSync();
+          playBtn.textContent = "⏸ 暫停";
+          isPlaying = true;
+        }).catch(e => console.error(e));
+      }
     }
   }
 
-  // 4. 進度條拖動同步
-  // 當使用者拉動影片進度條 (native controls)
-  video.addEventListener('seeked', () => {
-    if (isAudioReady) {
-      audio.currentTime = video.currentTime;
-    }
-  });
-  
-  video.addEventListener('seeking', () => {
-    if (isAudioReady && !audio.paused) {
-      audio.pause(); // 拖動時先暫停聲音避免雜音
-    }
-  });
-
-  // 5. 自動校正機制 (每 0.5 秒檢查一次)
-  // 如果影片和聲音誤差超過 0.1 秒，強制把聲音拉回來
-  function startSyncCheck() {
-    stopSyncCheck();
+  // 同步校正
+  function startSync() {
+    stopSync();
     syncInterval = setInterval(() => {
-      if (!isAudioReady || video.paused) return;
-      
-      const diff = Math.abs(video.currentTime - audio.currentTime);
-      if (diff > 0.1) {
-        // console.log(`校正同步：誤差 ${diff}秒`);
-        audio.currentTime = video.currentTime;
+      if (!isPlaying) return;
+      const diff = Math.abs(mainVideo.currentTime - extAudio.currentTime);
+      if (diff > 0.15) {
+        extAudio.currentTime = mainVideo.currentTime;
       }
     }, 500);
   }
 
-  function stopSyncCheck() {
+  function stopSync() {
     if (syncInterval) clearInterval(syncInterval);
   }
 
-  // 影片播完
-  video.addEventListener('ended', () => {
-    audio.pause();
-    audio.currentTime = 0;
-    playBtn.textContent = "▶ 重播";
-    stopSyncCheck();
+  // 進度條拖拉同步
+  mainVideo.addEventListener('seeked', () => {
+    extAudio.currentTime = mainVideo.currentTime;
+  });
+  mainVideo.addEventListener('seeking', () => {
+    if (isPlaying) extAudio.pause();
+  });
+  mainVideo.addEventListener('play', () => {
+     if(isPlaying) extAudio.play();
+  });
+
+  // 3. 去人聲切換
+  vocalBtn.addEventListener('click', () => {
+    isVocalRemove = !isVocalRemove;
+    if (isVocalRemove) vocalBtn.classList.add('active');
+    else vocalBtn.classList.remove('active');
+    
+    if (currentIndex !== -1) setupAudioRouting();
+  });
+
+  // 4. 清單管理
+  function addToPlaylist() {
+    const vFile = videoInput.files[0];
+    const aFile = audioInput.files[0];
+
+    if (!vFile) return alert("請至少選擇一個影片檔案！");
+
+    // 如果沒有選音檔，就用影片檔自己當音檔 (原音模式)
+    const audioBlob = aFile ? aFile : vFile;
+    const isOriginal = !aFile; // 標記是否為原音
+
+    const item = {
+      title: vFile.name,
+      isOriginal: isOriginal,
+      videoUrl: URL.createObjectURL(vFile),
+      audioUrl: URL.createObjectURL(audioBlob)
+    };
+
+    playlist.push(item);
+    renderPlaylist();
+    
+    // Reset inputs
+    videoInput.value = '';
+    audioInput.value = '';
+    
+    // 自動播第一首
+    if (currentIndex === -1) playIndex(0);
+  }
+
+  function renderPlaylist() {
+    playlistEl.innerHTML = '';
+    playlist.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.className = `playlist-item ${idx === currentIndex ? 'playing' : ''}`;
+      li.innerHTML = `
+        <div class="item-info" onclick="playIndex(${idx})">
+          <span class="item-title">${idx+1}. ${item.title}</span>
+          <span class="item-sub">${item.isOriginal ? '原音播放' : '已掛載升降 Key 音軌'}</span>
+        </div>
+        <button class="btn-del" onclick="delIndex(${idx})">×</button>
+      `;
+      playlistEl.appendChild(li);
+    });
+  }
+
+  function playIndex(idx) {
+    if (idx < 0 || idx >= playlist.length) return;
+    
+    currentIndex = idx;
+    const item = playlist[idx];
+    
+    // Reset 狀態
+    stopSync();
+    isPlaying = false;
+    playBtn.textContent = "▶ 播放";
+    
+    // 載入資源
+    mainVideo.src = item.videoUrl;
+    extAudio.src = item.audioUrl;
+    
+    // 重要：如果我們有掛載獨立音軌，影片就要靜音；如果是原音模式，也要靜音影片，靠 extAudio 發聲(統一管理去人聲)
+    mainVideo.muted = true;
+    
+    statusText.textContent = `正在播放: ${item.title}`;
+    renderPlaylist();
+  }
+
+  function delIndex(idx) {
+    playlist.splice(idx, 1);
+    if (currentIndex === idx) {
+      mainVideo.src = '';
+      extAudio.src = '';
+      statusText.textContent = "停止播放";
+      currentIndex = -1;
+      isPlaying = false;
+      playBtn.textContent = "▶ 播放";
+    } else if (currentIndex > idx) {
+      currentIndex--;
+    }
+    renderPlaylist();
+  }
+
+  // 拖曳排序
+  new Sortable(playlistEl, {
+    animation: 150,
+    onEnd: (evt) => {
+      const item = playlist.splice(evt.oldIndex, 1)[0];
+      playlist.splice(evt.newIndex, 0, item);
+      if (currentIndex === evt.oldIndex) currentIndex = evt.newIndex;
+      else if (currentIndex > evt.oldIndex && currentIndex <= evt.newIndex) currentIndex--;
+      else if (currentIndex < evt.oldIndex && currentIndex >= evt.newIndex) currentIndex++;
+      renderPlaylist();
+    }
+  });
+
+  // 自動播下一首
+  mainVideo.addEventListener('ended', () => {
+    if (currentIndex < playlist.length - 1) playIndex(currentIndex + 1);
+    else {
+      isPlaying = false;
+      playBtn.textContent = "▶ 播放";
+    }
   });
 
 </script>
-
 </body>
 </html>
