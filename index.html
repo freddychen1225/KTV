@@ -2,313 +2,456 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🎤 專業 KTV Web App - 純音高升降 Key</title>
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KTV 播放器 (手動高品質升降 Key 版)</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
-    * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      margin: 0; padding: 20px; min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
     }
     .container {
-      max-width: 900px; margin: 0 auto; background: white;
-      border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 800px;
+      background-color: #1e1e1e;
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    h2 {
+      margin-top: 0;
+      text-align: center;
+      color: #bb86fc;
+      font-size: 1.5rem;
+    }
+    
+    /* 步驟指引區塊 */
+    .step-box {
+      background: #2c2c2c;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .step-title {
+      font-weight: bold;
+      color: #03dac6;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .tool-link {
+      display: inline-block;
+      background-color: #bb86fc;
+      color: #000;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      margin-top: 5px;
+      text-align: center;
+    }
+    .tool-link:hover {
+      background-color: #9965f4;
+    }
+
+    /* 播放器與控制項 */
+    #video-container {
+      width: 100%;
+      background-color: #000;
+      margin: 10px 0;
+      position: relative;
+      /* 16:9 aspect ratio container */
+      padding-top: 56.25%; 
+      border-radius: 8px;
       overflow: hidden;
     }
-    .header {
-      background: linear-gradient(135deg, #ff6b6b, #feca57); color: white;
-      padding: 30px; text-align: center;
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
-    .content { padding: 30px; }
-    .upload-area {
-      border: 3px dashed #ddd; border-radius: 15px; padding: 40px;
-      text-align: center; cursor: pointer; transition: all 0.3s;
-      margin-bottom: 20px;
-    }
-    .upload-area:hover { border-color: #667eea; background: #f8f9ff; }
-    .upload-area.dragover { border-color: #667eea; background: #e3f2fd; }
-    #fileInput { display: none; }
+    
     .controls {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 15px; margin: 20px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+      justify-content: center;
     }
-    .pitch-btn {
-      padding: 15px 10px; border: none; border-radius: 12px;
-      font-size: 16px; font-weight: bold; cursor: pointer;
-      transition: all 0.3s; color: white;
+    
+    /* 檔案上傳按鈕美化 */
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
     }
-    .pitch-up { background: linear-gradient(45deg, #4ecdc4, #44a08d); }
-    .pitch-down { background: linear-gradient(45deg, #ff6b6b, #ee5a52); }
-    .pitch-up:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(78,205,196,0.4); }
-    .pitch-down:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(255,107,107,0.4); }
-    .vocal-btn { 
-      grid-column: span 2; background: linear-gradient(45deg, #a8e6cf, #88d8a3);
-      padding: 15px; border-radius: 12px; border: none; font-size: 16px;
+    .file-input-wrapper input[type=file] {
+      font-size: 100px;
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      cursor: pointer;
     }
-    #video-container {
-      background: #000; border-radius: 15px; margin: 20px 0;
-      overflow: hidden; aspect-ratio: 16/9;
+    .btn {
+      background-color: #333;
+      color: white;
+      border: 1px solid #555;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
     }
-    video { width: 100%; height: 100%; }
-    .status {
-      padding: 15px; border-radius: 10px; margin: 15px 0;
-      font-weight: bold; text-align: center;
+    .btn-primary {
+      background-color: #03dac6;
+      color: #000;
+      border: none;
+      font-weight: bold;
     }
-    .loading { background: #fff3cd; color: #856404; }
-    .success { background: #d4edda; color: #155724; }
-    .error { background: #f8d7da; color: #721c24; }
-    .progress { background: #e3f2fd; color: #0c5460; }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    
+    /* 去人聲按鈕狀態 */
+    .vocal-active {
+      background-color: #cf6679 !important; /* Red/Pink for active */
+      color: #000 !important;
+      border-color: #cf6679 !important;
+      font-weight: bold;
+    }
+
+    /* 播放清單 */
+    #playlist-container {
+      border-top: 1px solid #333;
+      padding-top: 15px;
+    }
     #playlist {
-      background: #f8f9fa; border-radius: 10px; padding: 15px;
-      max-height: 200px; overflow-y: auto;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 300px;
+      overflow-y: auto;
     }
     .playlist-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px; margin: 5px 0; background: white;
-      border-radius: 8px; cursor: pointer;
+      background-color: #252525;
+      margin-bottom: 8px;
+      padding: 10px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: grab;
+      border-left: 4px solid transparent;
     }
-    .playlist-item:hover { background: #e3f2fd; }
-    .playlist-item.playing { background: #4ecdc4; color: white; }
-    .delete-btn { 
-      background: #ff4757; color: white; border: none;
-      border-radius: 50%; width: 25px; height: 25px; cursor: pointer;
+    .playlist-item.playing {
+      background-color: #333;
+      border-left-color: #bb86fc;
     }
-    @media (max-width: 768px) {
-      .controls { grid-template-columns: 1fr 1fr; }
-      .vocal-btn { grid-column: span 2; }
+    .playlist-item:active {
+      cursor: grabbing;
+    }
+    .item-name {
+      flex-grow: 1;
+      margin-right: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .delete-btn {
+      background: none;
+      border: none;
+      color: #777;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0 5px;
+    }
+    .delete-btn:hover {
+      color: #cf6679;
     }
   </style>
 </head>
 <body>
+
 <div class="container">
-  <div class="header">
-    <h1>🎤 專業 KTV 播放器</h1>
-    <p>上傳影片 → 一鍵升降 Key → 高品質播放</p>
+  <h2>KTV 播放器</h2>
+
+  <!-- 步驟 1：外部處理 -->
+  <div class="step-box">
+    <span class="step-title">需要升降 Key？</span>
+    <div style="font-size: 0.9rem; color: #ccc; margin-bottom: 8px;">
+      本機 Web 無法做到「不變速」的升降 Key。請先使用下方免費工具處理影片，下載後再匯入此 App 播放。
+    </div>
+    <a href="https://vocalremover.org/pitch" target="_blank" class="tool-link">
+      前往 VocalRemover (升降 Key) ↗
+    </a>
   </div>
 
-  <div class="content">
-    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-      <div>📁 點擊選擇影片檔案</div>
-      <div style="font-size: 14px; margin-top: 10px; color: #666;">
-        支援 MP4、MOV、WebM (最大 100MB)
-      </div>
-      <input type="file" id="fileInput" accept="video/*">
-    </div>
-
+  <!-- 步驟 2：匯入與播放 -->
+  <div class="step-box">
+    <span class="step-title">播放控制</span>
+    
     <div class="controls">
-      <button class="pitch-btn pitch-up" onclick="processPitch(2)">+2 Key</button>
-      <button class="pitch-btn pitch-up" onclick="processPitch(1)">+1 Key</button>
-      <button class="pitch-btn pitch-down" onclick="processPitch(-1)">-1 Key</button>
-      <button class="pitch-btn pitch-down" onclick="processPitch(-2)">-2 Key</button>
-      <button class="vocal-btn" id="vocalBtn" onclick="toggleVocalRemove()">🎵 啟用去人聲</button>
-      <button class="pitch-btn" style="background: #6c757d;" onclick="playOriginal()">原版播放</button>
+      <div class="file-input-wrapper">
+        <button class="btn btn-primary">＋ 加入影片 / 歌曲</button>
+        <input type="file" id="file-input" accept="video/*, audio/*" multiple>
+      </div>
+      
+      <button id="vocal-toggle" class="btn">啟用去人聲</button>
     </div>
-
-    <div id="status" class="status">準備就緒，請選擇影片檔案</div>
 
     <div id="video-container">
+      <!-- playsinline 避免 iPhone 自動全螢幕 -->
       <video id="player" controls playsinline webkit-playsinline></video>
     </div>
+  </div>
 
-    <div id="playlist"></div>
+  <!-- 播放清單 -->
+  <div id="playlist-container">
+    <h3 style="margin-top: 0; font-size: 1.1rem; color: #ccc;">待播清單</h3>
+    <ul id="playlist">
+      <li style="color: #666; text-align: center; padding: 10px;">清單目前為空</li>
+    </ul>
   </div>
 </div>
 
 <script>
-const { FFmpeg } = FFmpegWASM;
-const ffmpeg = new FFmpeg();
-const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-
-let originalVideoBlob;
-let processedVideos = new Map(); // key: pitch value, value: processed blob
-let currentPitch = 0;
-let isVocalRemove = false;
-let playlist = [];
-
-ffmpeg.on('log', ({ message }) => {
-  console.log(message);
-});
-
-ffmpeg.on('progress', ({ progress }) => {
-  document.getElementById('status').innerHTML = 
-    `處理中... ${Math.round(progress * 100)}%`;
-});
-
-document.getElementById('fileInput').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file && file.size < 100 * 1024 * 1024) { // 100MB limit
-    originalVideoBlob = file;
-    playlist = [{ name: file.name, blob: file }];
-    currentPitch = 0;
-    updateStatus('影片已選擇！點擊升降 Key 按鈕開始處理...', 'progress');
-    renderPlaylist();
-  } else {
-    alert('檔案過大 (最大 100MB) 或格式不支援');
-  }
-});
-
-async function processPitch(semitones) {
-  if (!originalVideoBlob) {
-    alert('請先選擇影片');
-    return;
-  }
-
-  const key = semitones;
-  if (processedVideos.has(key)) {
-    playProcessedVideo(key);
-    return;
-  }
-
-  updateStatus('正在抽取音訊...', 'loading');
+  // --- 變數與 DOM ---
+  const fileInput = document.getElementById('file-input');
+  const player = document.getElementById('player');
+  const playlistEl = document.getElementById('playlist');
+  const vocalBtn = document.getElementById('vocal-toggle');
   
-  try {
-    // 1. 初始化 FFmpeg
-    if (!ffmpeg.loaded) {
-      await ffmpeg.load({
-        coreURL: await getCoreURL(baseURL, 'avcodec'),
-        wasmURL: await getCoreURL(baseURL, 'wasm')
-      });
+  let audioContext;
+  let sourceNode;
+  // Web Audio Nodes for vocal removal
+  let splitter, merger, inverter;
+  
+  let isVocalRemove = false;
+  let playlist = [];
+  let currentIndex = -1;
+
+  // --- 1. 音訊處理核心 (Web Audio API) ---
+  // 這裡我們只做「即時去人聲」，這是 Web 可以完美處理且不影響速度/音質的
+  function initAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+  }
+
+  function setupAudioGraph() {
+    if (!audioContext) initAudioContext();
+    
+    // 如果已經有 sourceNode，先斷開舊連接，避免重複疊加
+    if (sourceNode) {
+      sourceNode.disconnect();
+    } else {
+      // 第一次建立 Source
+      sourceNode = audioContext.createMediaElementSource(player);
     }
 
-    // 2. 寫入原始影片
-    await ffmpeg.writeFile('input.mp4', await fetchFile(originalVideoBlob));
+    // 根據是否去人聲來決定路由
+    if (isVocalRemove) {
+      // --- 去人聲模式 (Center Channel Extraction / Subtraction) ---
+      // 原理：(L - R) 放在兩個聲道。人聲通常在中央 (L=R)，相減後消失。
+      
+      if (!splitter) splitter = audioContext.createChannelSplitter(2);
+      if (!merger) merger = audioContext.createChannelMerger(2);
+      if (!inverter) {
+        inverter = audioContext.createGain();
+        inverter.gain.value = -1; // 反相器
+      }
 
-    // 3. 抽取音訊
-    updateStatus('抽取音訊完成，正在線上升降 Key...', 'loading');
-    await ffmpeg.exec(['-i', 'input.mp4', '-vn', '-acodec', 'mp3', 'audio.mp3']);
-    const audioData = await ffmpeg.readFile('audio.mp3');
+      // 重新連接圖
+      // Source -> Splitter
+      sourceNode.connect(splitter);
 
-    // 4. 線上升降 Key 處理 (使用 vocalremover.org)
-    const processedAudio = await pitchShiftOnline(audioData, semitones);
-    
-    // 5. 寫回處理後音訊
-    await ffmpeg.writeFile('processed.mp3', processedAudio);
+      // L 聲道 -> Merger L
+      splitter.connect(merger, 0, 0);
+      
+      // R 聲道 -> Inverter -> Merger L (實現 L - R)
+      splitter.connect(inverter, 1);
+      inverter.connect(merger, 0, 0); 
+      
+      // 同樣的訊號也給 Merger R，變成雙單聲道輸出 (不然只有一邊有聲音很怪)
+      splitter.connect(merger, 0, 1); // L -> Merger R
+      inverter.connect(merger, 0, 1); // -R -> Merger R
 
-    // 6. 重新合成影片 + 處理音訊
-    updateStatus('合成影片中...', 'loading');
-    await ffmpeg.exec([
-      '-i', 'input.mp4', '-i', 'processed.mp3',
-      '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0',
-      'output.mp4'
-    ]);
-
-    // 7. 讀取最終影片
-    const finalVideo = await ffmpeg.readFile('output.mp4');
-    const finalBlob = new Blob([finalVideo.buffer], { type: 'video/mp4' });
-    
-    processedVideos.set(key, finalBlob);
-    playProcessedVideo(key);
-    updateStatus(`✅ 升降 Key ${semitones > 0 ? '+' : ''}${semitones} 完成！`, 'success');
-
-  } catch (error) {
-    console.error(error);
-    updateStatus('❌ 處理失敗，請重試', 'error');
+      // Merger -> Destination
+      merger.connect(audioContext.destination);
+      
+    } else {
+      // --- 一般模式 ---
+      // 直接輸出
+      sourceNode.connect(audioContext.destination);
+    }
   }
-}
 
-async function pitchShiftOnline(audioData, semitones) {
-  // 使用 vocalremover.org 的 pitch shifter API
-  const formData = new FormData();
-  formData.append('audio', new Blob([audioData], { type: 'audio/mp3' }), 'audio.mp3');
+  // --- 2. 介面互動 ---
   
-  // 注意：這是示意 endpoint，實際使用需確認服務 API
-  const response = await fetch('https://vocalremover.org/api/pitch', {
-    method: 'POST',
-    body: formData
+  // 去人聲按鈕切換
+  vocalBtn.addEventListener('click', () => {
+    isVocalRemove = !isVocalRemove;
+    
+    if (isVocalRemove) {
+      vocalBtn.textContent = "去人聲：開啟";
+      vocalBtn.classList.add('vocal-active');
+    } else {
+      vocalBtn.textContent = "啟用去人聲";
+      vocalBtn.classList.remove('vocal-active');
+    }
+    
+    // 如果正在播放中，立即更新音訊圖
+    if (!player.paused && !player.ended && player.currentTime > 0) {
+      setupAudioGraph();
+    }
   });
-  
-  if (!response.ok) {
-    throw new Error('線上升降 Key 服務暫不可用，使用本地處理');
+
+  // 當影片開始播放時，確保 AudioContext 啟動並連接
+  player.addEventListener('play', () => {
+    initAudioContext();
+    setupAudioGraph();
+  });
+
+  // 自動播放下一首
+  player.addEventListener('ended', () => {
+    if (currentIndex < playlist.length - 1) {
+      playIndex(currentIndex + 1);
+    }
+  });
+
+  // --- 3. 播放清單邏輯 ---
+
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // 加入清單陣列
+    files.forEach(file => {
+      playlist.push({
+        name: file.name,
+        url: URL.createObjectURL(file)
+      });
+    });
+
+    renderPlaylist();
+
+    // 如果原本沒在播，就從新加入的第一首開始播
+    if (currentIndex === -1) {
+      playIndex(playlist.length - files.length);
+    }
+    
+    // 清空 input 讓重複選檔也能觸發 change
+    fileInput.value = ''; 
+  });
+
+  function playIndex(index) {
+    if (index < 0 || index >= playlist.length) return;
+    
+    currentIndex = index;
+    const item = playlist[index];
+    
+    player.src = item.url;
+    player.play().catch(err => console.log("播放阻擋或錯誤:", err));
+    
+    renderPlaylist(); // 更新 UI 高亮
   }
-  
-  return await response.arrayBuffer();
-}
 
-async function getCoreURL(baseURL, file) {
-  const result = await fetch(`${baseURL}/${file}.data`, { headers: { 'Content-Type': 'application/octet-stream' } });
-  const data = await result.arrayBuffer();
-  return URL.createObjectURL(new Blob([data]));
-}
-
-async function fetchFile(file) {
-  return new Uint8Array(await file.arrayBuffer());
-}
-
-function playProcessedVideo(pitch) {
-  const video = document.getElementById('player');
-  const blob = processedVideos.get(pitch) || originalVideoBlob;
-  video.src = URL.createObjectURL(blob);
-  video.play();
-  currentPitch = pitch;
-}
-
-function playOriginal() {
-  const video = document.getElementById('player');
-  if (originalVideoBlob) {
-    video.src = URL.createObjectURL(originalVideoBlob);
-    video.play();
-    currentPitch = 0;
+  function deleteIndex(index, event) {
+    event.stopPropagation(); // 避免觸發點擊播放
+    
+    // 釋放記憶體
+    URL.revokeObjectURL(playlist[index].url);
+    
+    playlist.splice(index, 1);
+    
+    // 修正 currentIndex
+    if (index === currentIndex) {
+      // 刪掉正在播的 -> 播下一首，或停止
+      if (playlist.length > 0) {
+        // 如果還有歌，播現在這個位置的歌（原本的下一首變成了現在這個index）
+        // 但要注意 index 是否越界
+        const newIndex = index >= playlist.length ? 0 : index;
+        playIndex(newIndex);
+      } else {
+        // 沒歌了
+        currentIndex = -1;
+        player.src = '';
+        player.removeAttribute('src'); // 徹底清空
+      }
+    } else if (index < currentIndex) {
+      // 刪掉前面的 -> 目前播放 index 減 1
+      currentIndex--;
+    }
+    
+    renderPlaylist();
   }
-}
 
-function toggleVocalRemove() {
-  isVocalRemove = !isVocalRemove;
-  const btn = document.getElementById('vocalBtn');
-  btn.textContent = isVocalRemove ? '🎵 關閉去人聲' : '🎵 啟用去人聲';
-  btn.style.background = isVocalRemove ? 
-    'linear-gradient(45deg, #ff9a9e, #fecfef)' : 
-    'linear-gradient(45deg, #a8e6cf, #88d8a3)';
-}
+  function renderPlaylist() {
+    playlistEl.innerHTML = '';
+    
+    if (playlist.length === 0) {
+      playlistEl.innerHTML = '<li style="color: #666; text-align: center; padding: 10px;">清單目前為空</li>';
+      return;
+    }
 
-function updateStatus(message, type) {
-  const el = document.getElementById('status');
-  el.textContent = message;
-  el.className = `status ${type}`;
-}
+    playlist.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.className = 'playlist-item';
+      if (idx === currentIndex) li.classList.add('playing');
+      
+      // 拖曳識別屬性
+      li.setAttribute('data-id', idx);
 
-function renderPlaylist() {
-  const playlistEl = document.getElementById('playlist');
-  playlistEl.innerHTML = `
-    <div style="font-weight: bold; margin-bottom: 10px;">
-      播放清單 (${playlist.length} 首)
-    </div>
-    ${playlist.map((item, index) => `
-      <div class="playlist-item ${index === 0 && currentPitch === 0 ? 'playing' : ''}"
-           onclick="playPlaylistItem(${index})">
-        <span>${item.name}</span>
-        <button class="delete-btn" onclick="deletePlaylistItem(${index}); event.stopPropagation()">×</button>
-      </div>
-    `).join('')}
-  `;
-}
+      li.innerHTML = `
+        <span class="item-name">${idx + 1}. ${item.name}</span>
+        <button class="delete-btn" onclick="deleteIndex(${idx}, event)">×</button>
+      `;
+      
+      li.onclick = () => playIndex(idx);
+      playlistEl.appendChild(li);
+    });
+  }
 
-function playPlaylistItem(index) {
-  // 簡化：目前只支援單一影片，可擴展
-}
+  // --- 4. 拖曳排序 (SortableJS) ---
+  Sortable.create(playlistEl, {
+    animation: 150,
+    onEnd: function (evt) {
+      const oldIndex = evt.oldIndex;
+      const newIndex = evt.newIndex;
+      
+      if (oldIndex === newIndex) return;
 
-function deletePlaylistItem(index) {
-  playlist.splice(index, 1);
-  renderPlaylist();
-}
+      // 調整陣列順序
+      const movedItem = playlist.splice(oldIndex, 1)[0];
+      playlist.splice(newIndex, 0, movedItem);
 
-// Drag & Drop 支援
-const uploadArea = document.querySelector('.upload-area');
-uploadArea.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadArea.classList.add('dragover');
-});
-uploadArea.addEventListener('dragleave', () => {
-  uploadArea.classList.remove('dragover');
-});
-uploadArea.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadArea.classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  document.getElementById('fileInput').files = e.dataTransfer.files;
-  document.getElementById('fileInput').dispatchEvent(new Event('change'));
-});
+      // 調整 currentIndex
+      if (currentIndex === oldIndex) {
+        currentIndex = newIndex;
+      } else if (currentIndex > oldIndex && currentIndex <= newIndex) {
+        currentIndex--;
+      } else if (currentIndex < oldIndex && currentIndex >= newIndex) {
+        currentIndex++;
+      }
+      
+      renderPlaylist(); // 重新渲染以更新編號
+    }
+  });
+
 </script>
+
 </body>
 </html>
